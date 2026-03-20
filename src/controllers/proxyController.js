@@ -55,6 +55,53 @@ const inferExt = (extParam, url) => {
   return m ? m[1].toLowerCase() : "";
 };
 
+const runFfmpegMerge = async (videoUrl, audioUrl, outputPath) =>
+  new Promise((resolve, reject) => {
+    const args = [
+      "-y",
+      "-i",
+      videoUrl,
+      "-i",
+      audioUrl,
+      "-c:v",
+      "copy",
+      "-c:a",
+      "aac",
+      "-movflags",
+      "+faststart",
+      outputPath
+    ];
+
+    const ffmpeg = spawn(env.FFMPEG_BINARY, args, { stdio: ["ignore", "ignore", "pipe"] });
+
+    let stderr = "";
+    ffmpeg.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    ffmpeg.on("error", (err) => reject(err));
+    ffmpeg.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`));
+    });
+  });
+
+const runDirectMerge = async (videoUrl, audioUrl, res, filename) => {
+  const tempDir = await mkdtemp(join(tmpdir(), "snapfetch-merge-"));
+  const outputPath = join(tempDir, filename);
+
+  try {
+    await runFfmpegMerge(videoUrl, audioUrl, outputPath);
+
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    await streamPipeline(createReadStream(outputPath), res);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+};
+
 const runYtDlpMerge = async (pageUrl, formatId, res, filename) => {
   const tempDir = await mkdtemp(join(tmpdir(), "snapfetch-"));
   const outputPath = join(tempDir, filename);
@@ -103,7 +150,7 @@ const runYtDlpMerge = async (pageUrl, formatId, res, filename) => {
 };
 
 export const proxyDownload = async (req, res, next) => {
-  const { url, filename, ext: extParam, formatId, pageUrl } = req.query;
+  const { url, filename, ext: extParam, formatId, pageUrl, audio } = req.query;
   const ext = inferExt(typeof extParam === "string" ? extParam : "", url) || "mp4";
   const inferredName = safeFilename(filename || new URL(url).pathname.split("/").pop(), ext);
 
@@ -116,6 +163,12 @@ export const proxyDownload = async (req, res, next) => {
   };
 
   try {
+    if (typeof audio === "string" && audio) {
+      const mergedName = inferredName.endsWith(".mp4") ? inferredName : `${inferredName}.mp4`;
+      await runDirectMerge(url, audio, res, mergedName);
+      return;
+    }
+
     if (formatId && pageUrl) {
       await runYtDlpMerge(pageUrl, formatId, res, inferredName.endsWith(".mp4") ? inferredName : `${inferredName}.mp4`);
       return;
