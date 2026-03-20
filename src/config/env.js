@@ -13,6 +13,7 @@ export const env = {
   FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN || "*",
   YTDLP_BINARY: process.env.YTDLP_BINARY || "yt-dlp",
   FFMPEG_BINARY: process.env.FFMPEG_BINARY || "ffmpeg",
+  YOUTUBE_COOKIES: process.env.YOUTUBE_COOKIES || "",
   RATE_LIMIT_WINDOW_MS: asNumber(process.env.RATE_LIMIT_WINDOW_MS, 60_000),
   RATE_LIMIT_MAX: asNumber(process.env.RATE_LIMIT_MAX, 30),
   INSTAGRAM_SESSIONID: process.env.INSTAGRAM_SESSIONID || ""

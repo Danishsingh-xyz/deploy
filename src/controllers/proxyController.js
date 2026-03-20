@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { pipeline } from "node:stream";
 import { promisify } from "node:util";
 import { env } from "../config/env.js";
+import { prepareYtDlpCookieArgs } from "../utils/ytDlpCookies.js";
 
 const streamPipeline = promisify(pipeline);
 
@@ -57,10 +58,12 @@ const inferExt = (extParam, url) => {
 const runYtDlpMerge = async (pageUrl, formatId, res, filename) => {
   const tempDir = await mkdtemp(join(tmpdir(), "snapfetch-"));
   const outputPath = join(tempDir, filename);
+  const cookieSetup = await prepareYtDlpCookieArgs();
 
   try {
     await new Promise((resolve, reject) => {
       const args = [
+        ...cookieSetup.args,
         "-f",
         `${formatId}+bestaudio[ext=m4a]/${formatId}+bestaudio/best`,
         "--no-playlist",
@@ -94,6 +97,7 @@ const runYtDlpMerge = async (pageUrl, formatId, res, filename) => {
 
     await streamPipeline(createReadStream(outputPath), res);
   } finally {
+    await cookieSetup.cleanup();
     await rm(tempDir, { recursive: true, force: true });
   }
 };

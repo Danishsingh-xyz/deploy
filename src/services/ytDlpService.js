@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { env } from "../config/env.js";
+import { prepareYtDlpCookieArgs } from "../utils/ytDlpCookies.js";
 
 const parseJsonOutput = (raw) => {
   try {
@@ -44,8 +45,11 @@ const normalizeSubtitles = (info) => {
 };
 
 export const extractMediaInfo = (targetUrl) =>
-  new Promise((resolve, reject) => {
+  new Promise(async (resolve, reject) => {
+    const cookieSetup = await prepareYtDlpCookieArgs();
+
     const args = [
+      ...cookieSetup.args,
       "--dump-single-json",
       "--no-warnings",
       "--no-playlist",
@@ -68,30 +72,35 @@ export const extractMediaInfo = (targetUrl) =>
       stderr += chunk.toString();
     });
 
-    child.on("error", (error) => {
+    child.on("error", async (error) => {
+      await cookieSetup.cleanup();
       reject(new Error(`Failed to start yt-dlp: ${error.message}`));
     });
 
-    child.on("close", (code) => {
-      if (code !== 0) {
-        const message = stderr.trim() || "yt-dlp failed to extract media";
-        reject(new Error(message));
-        return;
+    child.on("close", async (code) => {
+      try {
+        if (code !== 0) {
+          const message = stderr.trim() || "yt-dlp failed to extract media";
+          reject(new Error(message));
+          return;
+        }
+
+        const info = parseJsonOutput(stdout);
+        const formats = normalizeFormats(info);
+        const subtitles = normalizeSubtitles(info);
+
+        resolve({
+          id: info.id || null,
+          title: info.title || null,
+          duration: info.duration || null,
+          uploader: info.uploader || info.channel || null,
+          webpageUrl: info.webpage_url || targetUrl,
+          thumbnail: info.thumbnail || (Array.isArray(info.thumbnails) ? info.thumbnails.at(-1)?.url : null),
+          formats,
+          subtitles
+        });
+      } finally {
+        await cookieSetup.cleanup();
       }
-
-      const info = parseJsonOutput(stdout);
-      const formats = normalizeFormats(info);
-      const subtitles = normalizeSubtitles(info);
-
-      resolve({
-        id: info.id || null,
-        title: info.title || null,
-        duration: info.duration || null,
-        uploader: info.uploader || info.channel || null,
-        webpageUrl: info.webpage_url || targetUrl,
-        thumbnail: info.thumbnail || (Array.isArray(info.thumbnails) ? info.thumbnails.at(-1)?.url : null),
-        formats,
-        subtitles
-      });
     });
   });
