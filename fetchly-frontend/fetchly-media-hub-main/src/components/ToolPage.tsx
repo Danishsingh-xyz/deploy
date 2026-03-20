@@ -113,14 +113,12 @@ const ToolPage = ({ title, description, platform, apiPath }: ToolPageProps) => {
     const safeName = inferredFilename(filename || mediaTitle, ext || undefined);
     if (ext) params.append("ext", ext);
     params.append("filename", safeName);
-    if (formatId && originalUrl) {
+    if (bestAudioUrl) {
+      params.append("audio", bestAudioUrl);
+      if (bestAudioExt) params.append("audioExt", bestAudioExt);
+    } else if (formatId && originalUrl) {
       params.append("formatId", formatId);
       params.append("pageUrl", originalUrl);
-    }
-    if (bestAudioUrl && bestAudioExt) {
-      // preserved for backward compatibility if proxy merges manually
-      params.append("audio", bestAudioUrl);
-      params.append("audioExt", bestAudioExt);
     }
     if (startTime) params.append("start", startTime);
     if (endTime) params.append("end", endTime);
