@@ -54,8 +54,6 @@ export const extractMediaInfo = (targetUrl) =>
       "--no-warnings",
       "--no-playlist",
       "--skip-download",
-      "--write-auto-subs",
-      "--write-subs",
       targetUrl
     ];
 
